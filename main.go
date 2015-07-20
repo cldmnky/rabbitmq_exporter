@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 	"time"
-
+	"reflect"
 	"github.com/Sirupsen/logrus"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -75,6 +75,39 @@ var (
 			"node",
 		},
 	)
+	messagesPublished = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "messages_published",
+			Help:      "Total number of messages published.",
+		},
+		[]string{
+			// Which node was checked?
+			"node",
+		},
+	)
+	messagesUnacknowledged = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "messages_unacknowledged",
+			Help:      "Total number of messages unacknowledged in all queues.",
+		},
+		[]string{
+			// Which node was checked?
+			"node",
+		},
+	)
+	queueMessages = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "messages",
+			Help:      "Total number of messages in all queues.",
+		},
+		[]string{
+			// Which node was checked?
+			"node",
+		},
+	)
 )
 
 type Config struct {
@@ -101,7 +134,18 @@ func unpackMetrics(d *json.Decoder) (map[string]float64, string) {
 	for k, v := range output["object_totals"].(map[string]interface{}) {
 		metrics[k] = v.(float64)
 	}
+	for k, v := range output["queue_totals"].(map[string]interface{}) {
+		if reflect.ValueOf(v).Kind() == reflect.Float64 {
+			metrics[k] = v.(float64)
+		}
+	}
+	for k, v := range output["message_stats"].(map[string]interface{}) {
+		if reflect.ValueOf(v).Kind() == reflect.Float64 {
+			metrics[k] = v.(float64)
+		}
+	}
 	nodename, _ := output["node"].(string)
+	log.Error(metrics)
 	return metrics, nodename
 }
 
@@ -151,6 +195,9 @@ func updateMetrics(metrics map[string]float64, nodename string) {
 	consumersTotal.WithLabelValues(nodename).Set(metrics["consumers"])
 	queuesTotal.WithLabelValues(nodename).Set(metrics["queues"])
 	exchangesTotal.WithLabelValues(nodename).Set(metrics["exchanges"])
+	messagesPublished.WithLabelValues(nodename).Set(metrics["publish"])
+	queueMessages.WithLabelValues(nodename).Set(metrics["messages"])
+	messagesUnacknowledged.WithLabelValues(nodename).Set(metrics["messages_unacknowledged"])
 }
 
 func newConfig(path string) (*Config, error) {
@@ -195,4 +242,7 @@ func init() {
 	prometheus.MustRegister(queuesTotal)
 	prometheus.MustRegister(exchangesTotal)
 	prometheus.MustRegister(consumersTotal)
+	prometheus.MustRegister(messagesPublished)
+	prometheus.MustRegister(queueMessages)
+	prometheus.MustRegister(messagesUnacknowledged)
 }
