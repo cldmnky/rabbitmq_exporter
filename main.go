@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -13,7 +14,6 @@ import (
 
 const (
 	namespace  = "rabbitmq"
-	configPath = "config.json"
 )
 
 var log = logrus.New()
@@ -167,7 +167,11 @@ func newConfig(path string) (*Config, error) {
 
 func main() {
 	log.Out = os.Stdout
-	config, _ := newConfig(configPath)
+	var (
+			configPath = flag.String("config.path", "/etc/rabbitmq_exporter/config.json", "Path to config file")
+	)
+	flag.Parse()
+	config, _ := newConfig(*configPath)
 	updateNodesStats(config)
 
 	http.Handle("/metrics", prometheus.Handler())
